@@ -33,6 +33,13 @@ def create_app():
         return pipeline.execute(file.read())
     @application.get("/api/runs")
     def history(): return {"runs":store.history()}
+    @application.get("/api/publication")
+    def publication(): return {"current":store.current_publication(),"history":store.published_history()}
+    @application.post("/api/runs/<run_id>/publish")
+    def publish(run_id):
+        p=request.get_json(silent=True) or {}
+        if p and not isinstance(p.get("version"),int): raise DomainError("BAD_VERSION","请提供版本号")
+        return store.publish(run_id,p.get("version"))
     @application.get("/api/runs/<run_id>")
     def run_detail(run_id): return store.get(run_id)
     @application.post("/api/runs/<run_id>/review")

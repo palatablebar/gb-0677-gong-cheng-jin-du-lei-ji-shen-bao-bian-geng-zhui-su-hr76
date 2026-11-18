@@ -30,6 +30,19 @@
 | TRAP-07 | 累计量空值 | 按零冲回 | 隔离缺失 | `app/values.py` | `tests/test_m2.py::test_real_null_not_zero` |
 | TRAP-10 | 分币舍入 | 浮点误差 | 分项量化后净额守恒 | `app/modules/m5_deductions/rules.py` | `tests/test_m5.py::test_fraction_rounds_to_cent` |
 | TRAP-23 | 变更生效边界 | 旧价覆盖 | 按周期选择已批版本 | `app/modules/m3_changes/rules.py` | `tests/test_m3.py::test_effective_boundary` |
+| TRAP-27 | 跨分包商同号 | 按编号全局去重，后到覆盖先到，另一家工程量丢失 | 业务键改为 分包商+编号，同号两方全保留，登记共号证据 | `app/modules/m1_claims/rules.py`、`app/reasons.py` | `tests/test_merged_parties.py` |
+| TRAP-28 | 同号被当作重复导致漏量 | 只按清单+周期去重，另一家被隔离 | 去重键加入分包商 | `app/modules/m4_increment/rules.py` | `tests/test_merged_parties.py::test_increment_not_dropped_by_shared_item_period` |
+| TRAP-29 | 原回单一覆盖即不可回查 | 只保留后到行，原始回单丢失 | 每行保留原始回单号与原始行，冲突双方回单都入裁决记录 | `app/archive.py`、`app/modules/m1_claims/rules.py` | `tests/test_merged_parties.py::test_same_party_conflict_keeps_both_receipts` |
+| TRAP-30 | 发布失败破坏上一版 | 先删后写，失败后无版本 | 校验后单事务切换指针，失败不动当前版本 | `app/store.py` | `tests/test_publish.py::test_failed_publish_keeps_previous` |
+| TRAP-31 | 同批重跑新增版本 | 每次发布都插入新版本 | 同批同版复用，重跑同源只复用批次 | `app/store.py`、`app/pipeline.py` | `tests/test_publish.py::test_publish_twice_is_idempotent` |
+
+## 分包商同号规则
+
+申报编号由各分包商独立起编，仅在分包商内唯一，因此业务键为「分包商+申报编号」。同一编号出现在两个分包商下时：两行都进入计算，不做覆盖或丢弃；M1 汇总 `collisions`（共号编号、双方原始回单号、源行），M6/M7 输出逐方合计与 `shared_numbers`，证据 CSV 以 `shared_number` 行固化依据。同方同编号取值冲突仍保留首条、隔离后到行，并生成 `CF-xxx` 裁决记录，含保留行与隔离行的回单号、原始内容、冲突字段与裁决依据，导出为 `conflict_basis` 行。缺失回单号时按 `分包商/编号/源行` 生成稳定可回查编号。
+
+## 发布语义
+
+`POST /api/runs/<id>/publish` 先做归档就绪与来源行对平校验，再在单事务内切换当前发布指针；校验或事务失败都不改动上一版。同批同版本重复发布返回 `reused`，不产生新版本；携带过期 version 返回 409。`published` 表保存发布时的完整冻结副本，复核状态变化不影响已发布内容；`published_log` 记录发布历史。
 
 ## 对账规则
 
